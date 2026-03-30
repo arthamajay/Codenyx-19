@@ -30,6 +30,7 @@ export default function App() {
           <Route path="/login" element={<PublicRoute><AuthScreen /></PublicRoute>} />
           <Route path="/:section" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

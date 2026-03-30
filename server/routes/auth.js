@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 const sign = (user) =>
   jwt.sign(
-    { id: user._id, name: user.name, email: user.email, role: user.role },
+    { id: user._id, name: user.name, email: user.email, role: user.role, age: user.age, guardianEmail: user.guardianEmail },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -12,15 +12,16 @@ const sign = (user) =>
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, age, role } = req.body;
+    const { name, email, password, age, role, guardianEmail } = req.body;
     if (!name || !email || !password) return res.status(400).json({ message: 'All fields required' });
-    if (age && age < 13) return res.status(400).json({ message: 'Must be at least 13 years old' });
+    if (!age || age < 5) return res.status(400).json({ message: 'Must be at least 5 years old' });
+    if (age < 15 && !guardianEmail) return res.status(400).json({ message: 'Guardian email required for users under 15' });
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ message: 'Email already registered' });
 
-    const user = await User.create({ name, email, password, age, role: role || 'user' });
-    res.status(201).json({ token: sign(user), user: { name: user.name, email: user.email, role: user.role } });
+    const user = await User.create({ name, email, password, age, role: role || 'user', guardianEmail: guardianEmail || '' });
+    res.status(201).json({ token: sign(user), user: { name: user.name, email: user.email, role: user.role, age: user.age, guardianEmail: user.guardianEmail } });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -36,7 +37,7 @@ router.post('/login', async (req, res) => {
     if (!user || !(await user.matchPassword(password)))
       return res.status(401).json({ message: 'Incorrect email or password' });
 
-    res.json({ token: sign(user), user: { name: user.name, email: user.email, role: user.role } });
+    res.json({ token: sign(user), user: { name: user.name, email: user.email, role: user.role, age: user.age, guardianEmail: user.guardianEmail } });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

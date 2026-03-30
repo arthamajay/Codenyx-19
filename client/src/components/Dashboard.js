@@ -8,8 +8,9 @@ import VentSection from './sections/VentSection';
 import HelpSection from './sections/HelpSection';
 import SosSection  from './sections/SosSection';
 import CardSection from './sections/CardSection';
+import JournalSection from './sections/JournalSection';
 
-const VALID_SECTIONS = ['home', 'vent', 'help', 'sos', 'card'];
+const VALID_SECTIONS = ['home', 'vent', 'help', 'sos', 'card', 'journal'];
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -78,7 +79,7 @@ export default function Dashboard() {
         </div>
 
         <div className="nav-links" id="navLinks">
-          {[['home','Home'],['vent','Vent Mode'],['help','I Need Help'],['sos','🆘 SOS'],['card','💳 Health Card']].map(([key, label]) => (
+          {[['home','Home'],['vent', user?.age < 15 ? '💬 Share' : 'Vent Mode'],['help', user?.age < 15 ? '🤝 Talk' : 'I Need Help'],['sos','🆘 SOS'],['card', user?.age < 15 ? '📊 Mood Card' : '💳 Health Card'],['journal', user?.age < 15 ? '📔 Diary' : '📔 Journal']].map(([key, label]) => (
             <button key={key}
               className={`nav-btn${activeSection === key ? ' active' : ''}${key === 'sos' ? ' sos-nav-btn' : ''}`}
               onClick={e => { e.stopPropagation(); navTo(key); }}>
@@ -165,11 +166,12 @@ export default function Dashboard() {
       </div>
 
       <main className="app-container">
-        {activeSection === 'home' && <HomeSection navTo={navTo} />}
-        {activeSection === 'vent' && <VentSection navTo={navTo} />}
-        {activeSection === 'help' && <HelpSection />}
-        {activeSection === 'sos'  && <SosSection />}
-        {activeSection === 'card' && <CardSection user={user} />}
+        {activeSection === 'home'    && <HomeSection navTo={navTo} user={user} />}
+        {activeSection === 'vent'    && <VentSection navTo={navTo} />}
+        {activeSection === 'help'    && <HelpSection />}
+        {activeSection === 'sos'     && <SosSection />}
+        {activeSection === 'card'    && <CardSection user={user} />}
+        {activeSection === 'journal' && <JournalSection user={user} />}
       </main>
     </>
   );

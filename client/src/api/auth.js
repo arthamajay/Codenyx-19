@@ -33,3 +33,7 @@ export const bookClinic      = (id)        => API.post(`/clinics/${id}/book`);
 
 export const getStats        = ()          => API.get('/stats');
 export const getHealthCard   = ()          => API.get('/healthcard/me');
+
+export const getJournal      = ()          => API.get('/journal');
+export const postJournal     = (data)      => API.post('/journal', data);
+export const deleteJournal   = (id)        => API.delete(`/journal/${id}`);
