@@ -37,3 +37,19 @@ export const getHealthCard   = ()          => API.get('/healthcard/me');
 export const getJournal      = ()          => API.get('/journal');
 export const postJournal     = (data)      => API.post('/journal', data);
 export const deleteJournal   = (id)        => API.delete(`/journal/${id}`);
+
+// Admin
+export const getAdminStats   = ()          => API.get('/admin/stats');
+export const getAdminMentors = ()          => API.get('/admin/mentors');
+export const createMentor    = (data)      => API.post('/admin/mentors', data);
+export const updateMentor    = (id, data)  => API.patch(`/admin/mentors/${id}`, data);
+export const deleteMentor    = (id)        => API.delete(`/admin/mentors/${id}`);
+export const getAdminUsers   = ()          => API.get('/admin/users');
+export const updateUser      = (id, data)  => API.patch(`/admin/users/${id}`, data);
+export const getAdminVents   = ()          => API.get('/admin/vents');
+export const deleteVent      = (id)        => API.delete(`/admin/vents/${id}`);
+
+// Mentor
+export const getMentorMe       = ()        => API.get('/mentor/me');
+export const updateMentorMe    = (data)    => API.patch('/mentor/me', data);
+export const getMentorSessions = ()        => API.get('/mentor/sessions');

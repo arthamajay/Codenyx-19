@@ -1,23 +1,24 @@
 const router = require('express').Router();
-const Volunteer = require('../models/Volunteer');
+const User = require('../models/User');
 const ChatSession = require('../models/ChatSession');
 const authMiddleware = require('../middleware/auth');
 
-// GET all volunteers
+// GET all active mentors (for the Help section)
 router.get('/', async (req, res) => {
   try {
-    const volunteers = await Volunteer.find().sort({ status: 1, sessions: -1 });
-    res.json(volunteers);
+    const mentors = await User.find({ role: 'mentor', isActive: true })
+      .select('-password')
+      .sort({ status: 1, sessions: -1 });
+    res.json(mentors);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// POST save chat session
+// POST save chat session + increment mentor session count
 router.post('/chat', authMiddleware, async (req, res) => {
   try {
     const { volunteerName, messages, escalated, duration } = req.body;
     const session = await ChatSession.create({ userId: req.user.id, volunteerName, messages, escalated, duration });
-    // Increment volunteer session count
-    await Volunteer.findOneAndUpdate({ name: volunteerName }, { $inc: { sessions: 1 } });
+    await User.findOneAndUpdate({ name: volunteerName, role: 'mentor' }, { $inc: { sessions: 1 } });
     res.status(201).json(session);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

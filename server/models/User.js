@@ -6,11 +6,17 @@ const userSchema = new mongoose.Schema({
   email:         { type: String, required: true, unique: true, lowercase: true },
   password:      { type: String, required: true },
   age:           { type: Number, required: true },
-  role:          { type: String, enum: ['user', 'volunteer'], default: 'user' },
-  guardianEmail: { type: String, default: '' }, // for users under 15
+  role:          { type: String, enum: ['user', 'mentor', 'admin'], default: 'user' },
+  guardianEmail: { type: String, default: '' },
+  // mentor-specific fields
+  specialties:   [String],
+  bio:           { type: String, default: '' },
+  status:        { type: String, enum: ['available', 'away', 'busy'], default: 'available' },
+  sessions:      { type: Number, default: 0 },
+  rating:        { type: Number, default: 5.0 },
+  isActive:      { type: Boolean, default: true }, // admin can deactivate
 }, { timestamps: true });
 
-// Hash password before save
 userSchema.pre('save', async function () {
   if (!this.isModified('password')) return;
   this.password = await bcrypt.hash(this.password, 10);

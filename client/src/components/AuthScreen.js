@@ -177,25 +177,6 @@ export default function AuthScreen() {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">I am joining as…</label>
-                <div className="role-options">
-                  <label className="role-option">
-                    <input type="radio" name="role" value="user" checked={suRole === 'user'} onChange={() => setSuRole('user')} style={{ display: 'none' }} />
-                    <div className={`role-card${suRole === 'user' ? ' selected' : ''}`} onClick={() => setSuRole('user')} style={suRole === 'user' ? { borderColor: 'rgba(99,102,241,0.5)', background: 'rgba(99,102,241,0.12)' } : {}}>
-                      <span className="role-icon">💜</span>
-                      <div className="role-label">Seeking Support</div>
-                    </div>
-                  </label>
-                  <label className="role-option">
-                    <input type="radio" name="role" value="volunteer" checked={suRole === 'volunteer'} onChange={() => setSuRole('volunteer')} style={{ display: 'none' }} />
-                    <div className={`role-card${suRole === 'volunteer' ? ' selected' : ''}`} onClick={() => setSuRole('volunteer')} style={suRole === 'volunteer' ? { borderColor: 'rgba(99,102,241,0.5)', background: 'rgba(99,102,241,0.12)' } : {}}>
-                      <span className="role-icon">🤝</span>
-                      <div className="role-label">Volunteer</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-              <div className="form-group">
                 <label className="consent-label">
                   <input type="checkbox" checked={suConsent} onChange={e => setSuConsent(e.target.checked)} />
                   <span>I agree to the <button type="button" className="auth-link" style={{background:'none',border:'none',padding:0,cursor:'pointer',font:'inherit'}}>Privacy Policy</button> &amp; understand my data is securely protected</span>
