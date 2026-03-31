@@ -6,7 +6,7 @@ import {
   getAdminStats, getAdminMentors, createMentor, updateMentor, deleteMentor,
   getAdminUsers, updateUser, getAdminVents, deleteVent,
   getAdminDoctors, createDoctor, updateDoctor, deleteDoctor,
-  getAdminModeration,
+  getAdminModeration, getAdminInsights,
 } from '../api/auth';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [users, setUsers]   = useState([]);
   const [vents, setVents]   = useState([]);
   const [modLogs, setModLogs] = useState([]);
+  const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(true);
   const [addModal, setAddModal] = useState(false);
   const [form, setForm] = useState({ name:'', username:'', email:'', password:'', age:'', specialties:'', bio:'' });
@@ -75,6 +76,7 @@ export default function AdminDashboard() {
       setStats(s.data); setMentors(m.data); setUsers(u.data); setVents(v.data);
       try { const d = await getAdminDoctors(); setDoctors(d.data); } catch {}
       try { const ml = await getAdminModeration(); setModLogs(ml.data); } catch {}
+      try { const ins = await getAdminInsights(); setInsights(ins.data); } catch {}
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -111,7 +113,7 @@ export default function AdminDashboard() {
           <span style={{ fontSize:11, padding:'3px 10px', borderRadius:20, background:'rgba(244,63,94,0.15)', border:'1px solid rgba(244,63,94,0.3)', color:'#fca5a5', fontWeight:700, marginLeft:4 }}>NGO ADMIN</span>
         </div>
         <div style={{ display:'flex', gap:4, marginLeft:32 }}>
-          {[['overview','📊 Overview'],['analytics','📈 Analytics'],['mentors','🤝 Staff'],['doctors','🏥 Doctors'],['users','👥 Users'],['vents','🌊 Vents'],['moderation','🛡️ Moderation']].map(([key, label]) => (
+          {[['overview','📊 Overview'],['analytics','📈 Analytics'],['insights','🔍 Insights'],['mentors','🤝 Staff'],['doctors','🏥 Doctors'],['users','👥 Users'],['vents','🌊 Vents'],['moderation','🛡️ Moderation']].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{ padding:'7px 16px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:600, background: tab===key ? 'rgba(99,102,241,0.2)' : 'transparent', color: tab===key ? '#a5b4fc' : 'var(--text-muted)' }}>
               {label}
             </button>
@@ -374,6 +376,105 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── INSIGHTS ── */}
+        {tab === 'insights' && (
+          <div>
+            <h2 style={{ fontSize:26, fontWeight:800, marginBottom:6 }}>🔍 Community Insights</h2>
+            <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:28 }}>Most faced mental health challenges ranked by frequency, segmented by age group</p>
+
+            {!insights ? <div style={{ color:'var(--text-muted)' }}>Loading insights...</div> : (
+              <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+
+                {/* Problem ranking */}
+                <div style={card}>
+                  <div style={{ fontWeight:700, fontSize:16, marginBottom:20 }}>🏆 Most Faced Problems (by community posts)</div>
+                  {insights.problemRanking.map((item, idx) => {
+                    const max = insights.problemRanking[0]?.count || 1;
+                    const pct = Math.round((item.count / max) * 100);
+                    const colors = ['#f43f5e','#f97316','#f59e0b','#22c55e','#14b8a6','#6366f1'];
+                    const color = colors[idx % colors.length];
+                    return (
+                      <div key={item.problem} style={{ marginBottom:16 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                            <span style={{ width:24, height:24, borderRadius:'50%', background:`${color}22`, color, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:12, flexShrink:0 }}>#{idx+1}</span>
+                            <span style={{ fontWeight:600, fontSize:14 }}>{item.problem}</span>
+                          </div>
+                          <span style={{ fontSize:13, fontWeight:700, color }}>{item.count} posts</span>
+                        </div>
+                        <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:4, overflow:'hidden' }}>
+                          <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:4, transition:'width 0.8s ease' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Age group breakdown */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+                  <div style={card}>
+                    <div style={{ fontWeight:700, fontSize:16, marginBottom:20 }}>👥 Users by Age Group</div>
+                    {insights.ageGroups.map(ag => {
+                      const pct = insights.totalUsers > 0 ? Math.round((ag.count / insights.totalUsers) * 100) : 0;
+                      return (
+                        <div key={ag.group} style={{ marginBottom:14 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                            <span style={{ fontSize:13, fontWeight:600 }}>{ag.group}</span>
+                            <span style={{ fontSize:13, color: ag.color, fontWeight:700 }}>{ag.count} users ({pct}%)</span>
+                          </div>
+                          <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:`${pct}%`, background:ag.color, borderRadius:4 }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={card}>
+                    <div style={{ fontWeight:700, fontSize:16, marginBottom:20 }}>😔 Low Mood Reports by Age Group</div>
+                    {insights.distressAgeData.map((ag, i) => {
+                      const maxD = Math.max(...insights.distressAgeData.map(x => x.count), 1);
+                      const pct = Math.round((ag.count / maxD) * 100);
+                      const colors = ['#8b5cf6','#6366f1','#14b8a6','#f59e0b'];
+                      return (
+                        <div key={ag.group} style={{ marginBottom:14 }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                            <span style={{ fontSize:13, fontWeight:600 }}>{ag.group}</span>
+                            <span style={{ fontSize:13, color: colors[i], fontWeight:700 }}>{ag.count} logs</span>
+                          </div>
+                          <div style={{ height:8, background:'rgba(255,255,255,0.06)', borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:`${pct}%`, background:colors[i], borderRadius:4 }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop:16, fontSize:12, color:'var(--text-dim)', lineHeight:1.6 }}>
+                      Based on mood check-ins with score ≤ 2 (Very Low / Low)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary cards */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
+                  {[
+                    { label:'Most Common Issue',    value: insights.problemRanking[0]?.problem || '—',   icon:'🔴', sub: `${insights.problemRanking[0]?.count || 0} posts` },
+                    { label:'Largest Age Group',    value: insights.ageGroups.sort((a,b)=>b.count-a.count)[0]?.group || '—', icon:'👥', sub: `${insights.ageGroups.sort((a,b)=>b.count-a.count)[0]?.count || 0} users` },
+                    { label:'Total Community Posts',value: insights.totalVents,                           icon:'🌊', sub: 'all time' },
+                  ].map(s => (
+                    <div key={s.label} style={{ ...card, textAlign:'center' }}>
+                      <div style={{ fontSize:28, marginBottom:8 }}>{s.icon}</div>
+                      <div style={{ fontSize:16, fontWeight:800 }}>{s.value}</div>
+                      <div style={{ fontSize:11, color:'var(--text-dim)', marginTop:2 }}>{s.label}</div>
+                      <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{s.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
               </div>
             )}
           </div>

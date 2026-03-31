@@ -22,7 +22,7 @@ const SEVERE = [
   'i will kill you','i will hurt you','i will find you','you will die','gonna kill you',
   'i know where you live','come find you','beat you up','bash your head',
   // Targeted harassment
-  'kill yourself','kys','go die','you should die','nobody wants you','do everyone a favor and die',
+  'kill yourself','kill your self','kys','go die','you should die','nobody wants you','do everyone a favor and die',
   'end your life','you deserve to die','hope you die','wish you were dead',
   // Hindi/Hinglish slurs
   'madarchod','maderchod','bhenchod','bhen ke lode','chutiya','chutiye','gaandu','gandu',

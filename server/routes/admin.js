@@ -179,6 +179,72 @@ router.delete('/vents/:id', guard, async (req, res) => {
 
 module.exports = router;
 
+// ── INSIGHTS — most faced problems by age group ──────────────────────────────
+router.get('/insights', guard, async (req, res) => {
+  try {
+    // All vents with mood data
+    const allVents = await Vent.find({}, 'mood distress createdAt');
+
+    // All users with age
+    const allUsers = await User.find({ role: 'user' }, 'age createdAt');
+
+    // ── Problem ranking from vent moods ──────────────────────────────────────
+    const moodLabels = {
+      anxious:     'Anxiety',
+      sad:         'Sadness / Depression',
+      overwhelmed: 'Overwhelmed / Burnout',
+      hopeful:     'Seeking Hope',
+      angry:       'Anger / Frustration',
+      numb:        'Emotional Numbness',
+    };
+
+    const moodCount = {};
+    allVents.forEach(v => {
+      const label = moodLabels[v.mood] || v.mood;
+      moodCount[label] = (moodCount[label] || 0) + 1;
+    });
+
+    const problemRanking = Object.entries(moodCount)
+      .map(([problem, count]) => ({ problem, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Age group breakdown ───────────────────────────────────────────────────
+    const under14 = allUsers.filter(u => u.age > 0 && u.age < 14).length;
+    const age14to18 = allUsers.filter(u => u.age >= 14 && u.age <= 18).length;
+    const age19to25 = allUsers.filter(u => u.age >= 19 && u.age <= 25).length;
+    const above25   = allUsers.filter(u => u.age > 25).length;
+    const unknown   = allUsers.filter(u => !u.age || u.age === 0).length;
+
+    const ageGroups = [
+      { group: 'Under 14', count: under14,   color: '#8b5cf6' },
+      { group: '14–18',    count: age14to18, color: '#6366f1' },
+      { group: '19–25',    count: age19to25, color: '#14b8a6' },
+      { group: '25+',      count: above25,   color: '#f59e0b' },
+      { group: 'Unknown',  count: unknown,   color: '#64748b' },
+    ];
+
+    // ── High distress by age group ────────────────────────────────────────────
+    // MoodLogs with low scores (1-2) per age group
+    const lowMoodLogs = await MoodLog.find({ score: { $lte: 2 } }, 'userId score');
+    const userAgeMap = {};
+    allUsers.forEach(u => { userAgeMap[u._id.toString()] = u.age; });
+
+    const distressByAge = { 'Under 14': 0, '14–18': 0, '19–25': 0, '25+': 0 };
+    lowMoodLogs.forEach(log => {
+      const age = userAgeMap[log.userId?.toString()];
+      if (!age) return;
+      if (age < 14)             distressByAge['Under 14']++;
+      else if (age <= 18)       distressByAge['14–18']++;
+      else if (age <= 25)       distressByAge['19–25']++;
+      else                      distressByAge['25+']++;
+    });
+
+    const distressAgeData = Object.entries(distressByAge).map(([group, count]) => ({ group, count }));
+
+    res.json({ problemRanking, ageGroups, distressAgeData, totalVents: allVents.length, totalUsers: allUsers.length });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // ── MODERATION LOGS ──────────────────────────────────────────────────────────
 router.get('/moderation', guard, async (req, res) => {
   try {
