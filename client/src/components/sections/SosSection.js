@@ -7,7 +7,6 @@ export default function SosSection() {
   const { user }              = useAuth();
   const { socket, connected } = useSocket();
 
-  const [doctors, setDoctors]   = useState([]);
   const [activeDoctor, setActiveDoctor] = useState(null);
 
   // Chat state
@@ -23,7 +22,6 @@ export default function SosSection() {
 
   useEffect(() => {
     getAvailableDoctors().then(r => {
-      setDoctors(r.data);
       if (r.data.length > 0) setActiveDoctor(r.data[0]);
     }).catch(() => {});
   }, []);
