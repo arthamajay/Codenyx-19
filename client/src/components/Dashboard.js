@@ -9,8 +9,9 @@ import HelpSection from './sections/HelpSection';
 import SosSection  from './sections/SosSection';
 import CardSection from './sections/CardSection';
 import JournalSection from './sections/JournalSection';
+import GardenSection from './sections/GardenSection';
 
-const VALID_SECTIONS = ['home', 'vent', 'help', 'sos', 'card', 'journal'];
+const VALID_SECTIONS = ['home', 'vent', 'help', 'sos', 'card', 'journal', 'garden'];
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -79,7 +80,7 @@ export default function Dashboard() {
         </div>
 
         <div className="nav-links" id="navLinks">
-          {[['home','Home'],['vent','🌊 Community'],['help','I Need Help'],['sos','🆘 SOS'],['card','💳 Health Card'],['journal','📔 Journal']].map(([key, label]) => (
+          {[['home','Home'],['vent','🌊 Community'],['help','I Need Help'],['sos','🆘 SOS'],['card','💳 Health Card'],['garden','🌱 Garden'],['journal','📔 Journal']].map(([key, label]) => (
             <button key={key}
               className={`nav-btn${activeSection === key ? ' active' : ''}${key === 'sos' ? ' sos-nav-btn' : ''}`}
               onClick={e => { e.stopPropagation(); navTo(key); }}>
@@ -158,6 +159,7 @@ export default function Dashboard() {
         {activeSection === 'help'    && <HelpSection />}
         {activeSection === 'sos'     && <SosSection />}
         {activeSection === 'card'    && <CardSection user={user} />}
+        {activeSection === 'garden'  && <GardenSection user={user} />}
         {activeSection === 'journal' && <JournalSection user={user} />}
       </main>
     </>
