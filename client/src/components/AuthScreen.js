@@ -1,12 +1,143 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import { loginUser, registerUser } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+
+const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const THERAPIST  = { name: 'Dr. Ananya', initials: 'DA', color: '#f43f5e' };
+
+function EmergencyChat({ onClose }) {
+  const [messages, setMessages]   = useState([{
+    _id: 'w', from: 'recv',
+    text: "Hi, I'm Dr. Ananya — a licensed crisis therapist. You don't need to sign in. I'm here right now. What's going on?",
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  }]);
+  const [input, setInput]         = useState('');
+  const [typing, setTyping]       = useState(false);
+  const [ended, setEnded]         = useState(false);
+  const [connected, setConnected] = useState(false);
+  const socketRef    = useRef(null);
+  const sessionRef   = useRef(`anon_${Date.now()}__sos`);
+  const typingTimer  = useRef(null);
+  const endRef       = useRef(null);
+
+  useEffect(() => {
+    // Connect without a token — anonymous emergency access
+    const s = io(SOCKET_URL, { auth: {}, transports: ['websocket', 'polling'] });
+    socketRef.current = s;
+    s.on('connect', () => { setConnected(true); s.emit('join_session', sessionRef.current); });
+    s.on('new_message', (msg) => {
+      if (msg.sessionId !== sessionRef.current) return;
+      setMessages(prev => prev.find(m => m._id === msg._id) ? prev : [...prev, {
+        _id: msg._id, from: msg.from === 'user' ? 'sent' : 'recv',
+        text: msg.text,
+        time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }]);
+    });
+    s.on('typing', ({ isTyping }) => {
+      setTyping(isTyping);
+      if (isTyping) { clearTimeout(typingTimer.current); typingTimer.current = setTimeout(() => setTyping(false), 3000); }
+    });
+    s.on('session_ended', () => {
+      setEnded(true);
+      setMessages(prev => [...prev, { _id: 'end', from: 'recv', text: '✅ Session ended. You are not alone — reach out anytime. 💜', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    });
+    return () => s.disconnect();
+  }, []);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, typing]);
+
+  const send = () => {
+    const s = socketRef.current;
+    if (!input.trim() || !s || ended) return;
+    const text = input.trim();
+    setInput('');
+    s.emit('send_message', { sessionId: sessionRef.current, text, from: 'user', fromName: 'Anonymous' });
+    s.emit('typing', { sessionId: sessionRef.current, isTyping: false });
+  };
+
+  const handleInput = (e) => {
+    setInput(e.target.value);
+    const s = socketRef.current;
+    if (!s) return;
+    s.emit('typing', { sessionId: sessionRef.current, isTyping: true });
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => s.emit('typing', { sessionId: sessionRef.current, isTyping: false }), 2000);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 480, background: '#0d0d1a', border: '1px solid rgba(244,63,94,0.4)', borderRadius: 20, display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(244,63,94,0.2)', display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(244,63,94,0.06)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: THERAPIST.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'white', fontSize: 13, flexShrink: 0 }}>{THERAPIST.initials}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'white' }}>{THERAPIST.name}</div>
+            <div style={{ fontSize: 12, color: '#fca5a5' }}>{connected ? '🔴 Crisis Support · No login required' : '⏳ Connecting...'}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {messages.map((m, i) => (
+            <div key={m._id || i} style={{ display: 'flex', justifyContent: m.from === 'sent' ? 'flex-end' : 'flex-start' }}>
+              <div style={{ maxWidth: '78%' }}>
+                <div style={{ padding: '10px 14px', borderRadius: m.from === 'sent' ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: m.from === 'sent' ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(255,255,255,0.07)', color: 'white', fontSize: 14, lineHeight: 1.5, borderLeft: m.from === 'recv' ? '2px solid #f43f5e' : 'none' }}>
+                  {m.text}
+                </div>
+                <div style={{ fontSize: 10, color: '#475569', marginTop: 3, textAlign: m.from === 'sent' ? 'right' : 'left' }}>{m.time}</div>
+              </div>
+            </div>
+          ))}
+          {typing && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 3, padding: '8px 12px', background: 'rgba(255,255,255,0.07)', borderRadius: 12 }}>
+                {[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#f43f5e', animation: `bounce 1s ${i*0.2}s infinite` }} />)}
+              </div>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{THERAPIST.name} is typing...</span>
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+
+        {/* Input */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 10 }}>
+          <input
+            value={input} onChange={handleInput}
+            onKeyUp={e => e.key === 'Enter' && send()}
+            placeholder={ended ? 'Session ended' : 'Type your message...'}
+            disabled={ended}
+            style={{ flex: 1, padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: 14, outline: 'none' }}
+          />
+          {ended ? (
+            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: 'rgba(255,255,255,0.1)', color: 'white', cursor: 'pointer', fontSize: 13 }}>Close</button>
+          ) : (
+            <button onClick={send} style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#f43f5e', color: 'white', cursor: 'pointer', fontWeight: 700 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+          )}
+        </div>
+
+        {/* Helplines */}
+        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[['iCall','9152987821'],['Vandrevala','1860-2662-345'],['SNEHI','044-24640050']].map(([n, num]) => (
+            <a key={n} href={`tel:${num}`} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.25)', color: '#fca5a5', textDecoration: 'none' }}>
+              📞 {n}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AuthScreen() {
   const { login } = useAuth();
   const navigate  = useNavigate();
   const [tab, setTab] = useState('signin');
+  const [showSOS, setShowSOS] = useState(false);
 
   // Sign-in state
   const [siLogin, setSiLogin]       = useState(''); // username or email
@@ -113,6 +244,15 @@ export default function AuthScreen() {
 
   return (
     <div className="auth-screen" style={{ display: 'flex' }}>
+      {showSOS && <EmergencyChat onClose={() => setShowSOS(false)} />}
+
+      {/* SOS floating button */}
+      <button
+        onClick={() => setShowSOS(true)}
+        style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 400, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 22px', borderRadius: 50, border: 'none', background: 'linear-gradient(135deg,#f43f5e,#e11d48)', color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', boxShadow: '0 0 24px rgba(244,63,94,0.5)', animation: 'pulse 2s infinite' }}
+      >
+        🆘 Emergency Support
+      </button>
       {/* Left Panel */}
       <div className="auth-left">
         <div className="auth-brand">
