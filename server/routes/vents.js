@@ -7,15 +7,27 @@ const { analyzeComment } = require('../utils/abuseFilter');
 
 function serialize(vent) {
   const obj = vent.toObject({ virtuals: false });
+  delete obj.userId; // never expose userId publicly
   return obj;
 }
 
-// GET all vents sorted by likes desc (global ranking)
+// GET all vents — supports ?sort=new|top
 router.get('/', async (req, res) => {
   try {
-    const vents = await Vent.find()
-      .sort({ likes: -1, createdAt: -1 })
-      .limit(100);
+    const sort = req.query.sort === 'top'
+      ? { likes: -1, createdAt: -1 }
+      : { createdAt: -1 };
+    const vents = await Vent.find().sort(sort).limit(100);
+    res.json(vents.map(serialize));
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// GET current user's own vents
+router.get('/my', authMiddleware, async (req, res) => {
+  try {
+    const uid = req.user.id.toString();
+    // Only return vents that explicitly have this user's ID (not empty/null)
+    const vents = await Vent.find({ userId: { $eq: uid } }).sort({ createdAt: -1 }).limit(100);
     res.json(vents.map(serialize));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -26,6 +38,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const { anon, color, mood, text, distress } = req.body;
     if (!text?.trim()) return res.status(400).json({ message: 'Text is required' });
     const vent = await Vent.create({
+      userId: req.user.id,
       anon, color, mood, text: text.trim(), distress: distress || 0,
     });
     res.status(201).json(serialize(vent));

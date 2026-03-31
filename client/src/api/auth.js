@@ -17,7 +17,8 @@ API.interceptors.request.use(cfg => {
 export const loginUser       = (data)      => API.post('/auth/login', data);
 export const registerUser    = (data)      => API.post('/auth/register', data);
 
-export const getVents        = ()          => API.get('/vents');
+export const getVents        = (sort)      => API.get(`/vents${sort ? `?sort=${sort}` : ''}`);
+export const getMyVents      = ()          => API.get('/vents/my');
 export const postVent        = (data)      => API.post('/vents', data);
 export const likeVent        = (id)        => API.post(`/vents/${id}/like`);
 export const dislikeVent     = (id)        => API.post(`/vents/${id}/dislike`);

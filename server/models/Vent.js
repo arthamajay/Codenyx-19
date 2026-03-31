@@ -12,6 +12,7 @@ const commentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const ventSchema = new mongoose.Schema({
+  userId:        { type: String, default: '' },   // private — never exposed publicly
   anon:          { type: String, required: true },
   color:         { type: String, required: true },
   mood:          { type: String, required: true },

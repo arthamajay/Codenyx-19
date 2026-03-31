@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getVents, postVent, likeVent, dislikeVent, commentVent, deleteComment, likeComment, dislikeComment } from '../../api/auth';
+import { getVents, getMyVents, postVent, likeVent, dislikeVent, commentVent, deleteComment, likeComment, dislikeComment } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 
 const moodEmoji = { anxious: '😰', sad: '😢', overwhelmed: '😵', hopeful: '🌱', angry: '😤', numb: '😶' };
@@ -145,6 +145,7 @@ export default function VentSection({ navTo }) {
   const [loading, setLoading]           = useState(true);
   const [filter, setFilter]             = useState('all');
   const [sortBy, setSortBy]             = useState('new');
+  const [viewTab, setViewTab]           = useState('community'); // 'community' | 'mine'
   const [modalOpen, setModalOpen]       = useState(false);
   const [ventText, setVentText]         = useState('');
   const [selectedMood, setSelectedMood] = useState('');
@@ -157,7 +158,9 @@ export default function VentSection({ navTo }) {
 
   const fetchVents = useCallback(async (silent = false) => {
     try {
-      const res = await getVents();
+      const res = viewTab === 'mine'
+        ? await getMyVents()
+        : await getVents(sortBy);
       const data = res.data;
       if (!silent) {
         setVents(data);
@@ -170,7 +173,7 @@ export default function VentSection({ navTo }) {
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  }, []);
+  }, [sortBy, viewTab]);
 
   useEffect(() => { fetchVents(false); }, [fetchVents]);
   useEffect(() => {
@@ -215,7 +218,6 @@ export default function VentSection({ navTo }) {
   const handleLikeComment    = async (vid, cid) => { try { const r = await likeComment(vid, cid);    setVents(v => v.map(x => x._id === vid ? r.data : x)); } catch {} };
   const handleDislikeComment = async (vid, cid) => { try { const r = await dislikeComment(vid, cid); setVents(v => v.map(x => x._id === vid ? r.data : x)); } catch {} };
   let filtered = filter === 'all' ? vents : vents.filter(v => v.mood === filter);
-  if (sortBy === 'top') filtered = [...filtered].sort((a, b) => (b.likes - b.dislikes) - (a.likes - a.dislikes));
 
   const meterColor = distressLevel === 0 ? '#22c55e' : distressLevel < 0.4 ? '#f59e0b' : distressLevel < 0.7 ? '#f97316' : '#f43f5e';
   const meterText  = distressLevel === 0 ? 'AI is listening and here if you need support...'
@@ -254,14 +256,29 @@ export default function VentSection({ navTo }) {
       )}
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:20 }}>
-        <div className="mood-filters" style={{ marginBottom:0 }}>
-          {[['all','All'],['anxious','😰 Anxious'],['sad','😢 Sad'],['overwhelmed','😵 Overwhelmed'],['hopeful','🌱 Hopeful'],['angry','😤 Angry']].map(([key, label]) => (
-            <button key={key} className={`filter-btn${filter === key ? ' active' : ''}`} onClick={() => setFilter(key)}>{label}</button>
+        <div style={{ display:'flex', gap:4 }}>
+          {[['community','🌊 Community'],['mine','👤 My Posts']].map(([key, label]) => (
+            <button key={key}
+              onClick={() => { setViewTab(key); setFilter('all'); }}
+              style={{ padding:'8px 18px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13, fontWeight:600, background: viewTab===key ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)', color: viewTab===key ? '#a5b4fc' : 'var(--text-muted)' }}>
+              {label}
+            </button>
           ))}
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button className={`filter-btn${sortBy === 'new' ? ' active' : ''}`} onClick={() => setSortBy('new')}>🕐 New</button>
-          <button className={`filter-btn${sortBy === 'top' ? ' active' : ''}`} onClick={() => setSortBy('top')}>🔥 Top</button>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          {viewTab === 'community' && (
+            <div className="mood-filters" style={{ marginBottom:0 }}>
+              {[['all','All'],['anxious','😰 Anxious'],['sad','😢 Sad'],['overwhelmed','😵 Overwhelmed'],['hopeful','🌱 Hopeful'],['angry','😤 Angry']].map(([key, label]) => (
+                <button key={key} className={`filter-btn${filter === key ? ' active' : ''}`} onClick={() => setFilter(key)}>{label}</button>
+              ))}
+            </div>
+          )}
+          {viewTab === 'community' && (
+            <div style={{ display:'flex', gap:8 }}>
+              <button className={`filter-btn${sortBy === 'new' ? ' active' : ''}`} onClick={() => setSortBy('new')}>🕐 New</button>
+              <button className={`filter-btn${sortBy === 'top' ? ' active' : ''}`} onClick={() => setSortBy('top')}>🔥 Top</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -272,8 +289,7 @@ export default function VentSection({ navTo }) {
       ) : filtered.length === 0 ? (
         <div style={{ textAlign:'center', padding:'60px', color:'var(--text-muted)' }}>
           <div style={{ fontSize:32, marginBottom:12 }}>💜</div>
-          {filter === 'all' ? 'No posts yet. Be the first to share.' : `No ${filter} posts yet.`}
-        </div>
+          {viewTab === 'mine' ? "You haven't posted anything yet. Share your experience!" : filter === 'all' ? 'No posts yet. Be the first to share.' : `No ${filter} posts yet.`}        </div>
       ) : (
         <div className="vent-feed">
           {filtered.map(v => (
