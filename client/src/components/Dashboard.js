@@ -24,7 +24,7 @@ export default function Dashboard() {
     { id: 1, icon: '💜', message: `Welcome back, ${user?.name?.split(' ')[0]}!`, time: 'just now' },
   ]);
   const [stats, setStats]         = useState({ users: 0, volunteers: 0, slots: 0, ventsToday: 0 });
-  const [tickerMsgs, setTickerMsgs] = useState(['💜 MindBridge is live — you are not alone']);
+  const [tickerMsgs, setTickerMsgs] = useState(['💜 Sahara is live — you are not alone']);
 
   const navTo = (s) => {
     navigate(`/${s}`);
@@ -41,10 +41,10 @@ export default function Dashboard() {
         const s = res.data;
         setStats(s);
         setTickerMsgs([
-          `👥 ${s.users} registered users on MindBridge`,
+          `👥 ${s.users} registered users on Sahara`,
           `🤝 ${s.volunteers} volunteers available right now`,
           `🏥 ${s.slots} emergency clinic slots open`,
-          `💬 ${s.ventsToday} vents posted today`,
+          `💬 ${s.ventsToday} posts in the community today`,
           `💜 You are not alone — the community is here`,
           `🌱 Every step forward counts, no matter how small`,
           `🆘 Crisis support available 24/7 — tap SOS anytime`,
@@ -79,7 +79,7 @@ export default function Dashboard() {
         </div>
 
         <div className="nav-links" id="navLinks">
-          {[['home','Home'],['vent','🌊 Community'],['help','I Need Help'],['sos','🆘 SOS'],['card','💳 Health Card']].map(([key, label]) => (
+          {[['home','Home'],['vent','🌊 Community'],['help','I Need Help'],['sos','🆘 SOS'],['card','💳 Health Card'],['journal','📔 Journal']].map(([key, label]) => (
             <button key={key}
               className={`nav-btn${activeSection === key ? ' active' : ''}${key === 'sos' ? ' sos-nav-btn' : ''}`}
               onClick={e => { e.stopPropagation(); navTo(key); }}>
@@ -140,7 +140,7 @@ export default function Dashboard() {
             <div className="user-dropdown open">
               <div className="ud-header">
                 <div className="ud-name">{user?.name}</div>
-                <div className="ud-email">{user?.email}</div>
+                <div className="ud-email">@{user?.username}</div>
               </div>
               <button className="ud-item" onClick={() => navTo('card')}>💳 My Health Card</button>
               <button className="ud-item" onClick={() => navTo('home')}>🏠 Home</button>
@@ -151,19 +151,6 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      {/* Live Activity Ticker */}
-      <div className="activity-ticker">
-        <div className="ticker-inner">
-          <span className="ticker-label">LIVE</span>
-          <div className="ticker-track-wrap">
-            <div className="ticker-track">
-              {[...tickerMsgs, ...tickerMsgs].map((m, i) => (
-                <span key={i} className="ticker-item">{m}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <main className="app-container">
         {activeSection === 'home'    && <HomeSection navTo={navTo} />}
@@ -171,7 +158,7 @@ export default function Dashboard() {
         {activeSection === 'help'    && <HelpSection />}
         {activeSection === 'sos'     && <SosSection />}
         {activeSection === 'card'    && <CardSection user={user} />}
-        {/* {activeSection === 'journal' && <JournalSection user={user} />} */}
+        {activeSection === 'journal' && <JournalSection user={user} />}
       </main>
     </>
   );

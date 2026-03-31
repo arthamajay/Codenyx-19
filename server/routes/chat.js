@@ -6,14 +6,13 @@ const authMiddleware = require('../middleware/auth');
 
 // STATIC routes MUST come before /:sessionId
 
-// GET active sessions for a mentor
-// Session IDs are formatted as: userId__mentorId
+// GET active sessions for a mentor (sessions with messages in last 5 min)
 router.get('/mentor/active', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'mentor') return res.status(403).json({ message: 'Mentor only' });
-    const since = new Date(Date.now() - 30 * 60 * 1000);
+    const since    = new Date(Date.now() - 5 * 60 * 1000);
     const mentorId = req.user.id.toString();
-    const recent = await ChatMessage.find({
+    const recent   = await ChatMessage.find({
       sessionId: { $regex: `__${mentorId}$` },
       createdAt: { $gt: since },
     }).distinct('sessionId');
@@ -52,39 +51,27 @@ router.post('/:sessionId/end', authMiddleware, async (req, res) => {
     const { mentorName, escalated, duration } = req.body;
     const messages = await ChatMessage.find({
       sessionId: req.params.sessionId,
-      text: { $ne: '__SESSION_ENDED__' }
+      text: { $ne: '__SESSION_ENDED__' },
     }).sort({ createdAt: 1 });
 
     if (messages.length > 0) {
-      // Find the user ID from the session ID (format: userId__mentorId)
       const userId = req.params.sessionId.split('__')[0];
       await ChatSession.create({
         userId: userId || req.user.id,
         volunteerName: mentorName || req.user.name,
         messages: messages.map(m => ({ from: m.from, text: m.text })),
         escalated: escalated || false,
-        duration: duration || 0,
+        duration:  duration  || 0,
       });
       if (mentorName) {
-        await User.findOneAndUpdate({ name: mentorName, role: 'mentor' }, { $inc: { sessions: 1 } });
+        await User.findOneAndUpdate(
+          { name: mentorName, role: 'mentor' },
+          { $inc: { sessions: 1 } }
+        );
       }
     }
 
-    // Write system end marker so the other side detects it
-    const alreadyEnded = await ChatMessage.findOne({ sessionId: req.params.sessionId, text: '__SESSION_ENDED__' });
-    if (!alreadyEnded) {
-      await ChatMessage.create({
-        sessionId: req.params.sessionId,
-        from: 'system', fromName: 'System',
-        text: '__SESSION_ENDED__',
-      });
-    }
-
-    // Clean up after a short delay (give other side time to detect)
-    setTimeout(async () => {
-      await ChatMessage.deleteMany({ sessionId: req.params.sessionId });
-    }, 10000);
-
+    await ChatMessage.deleteMany({ sessionId: req.params.sessionId });
     res.json({ message: 'Session ended' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

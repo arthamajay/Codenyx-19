@@ -1,9 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getStats } from '../../api/auth';
+import { getStats, logMood, getTodayMoods } from '../../api/auth';
+
+const SLOTS = [
+  { key: 'morning',   icon: '🌅', label: 'Morning',   timeHint: '5 AM – 12 PM' },
+  { key: 'afternoon', icon: '☀️',  label: 'Afternoon', timeHint: '12 PM – 6 PM' },
+  { key: 'evening',   icon: '🌙', label: 'Evening',   timeHint: '6 PM – 12 AM' },
+];
+const SCORE_LABELS = { 1: 'Very Low', 2: 'Low', 3: 'Okay', 4: 'Good', 5: 'Great' };
+const SCORE_EMOJIS = { 1: '😞', 2: '😔', 3: '😐', 4: '🙂', 5: '😄' };
+
+function getCurrentSlot() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12)  return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'evening';
+}
 
 export default function HomeSection({ navTo }) {
-  const [ventsToday, setVentsToday] = useState(0);
+  const [ventsToday, setVentsToday]     = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [todayLogs, setTodayLogs]       = useState([]);
+
+  const [score, setScore]               = useState(null);
+  const [note, setNote]                 = useState('');
+  const [submitting, setSubmitting]     = useState(false);
+  const [checkinError, setCheckinError] = useState(null);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -13,11 +34,41 @@ export default function HomeSection({ navTo }) {
     finally { setLoadingStats(false); }
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  const fetchTodayLogs = useCallback(async () => {
+    try {
+      const res = await getTodayMoods();
+      setTodayLogs(res.data || []);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { fetchStats(); },     [fetchStats]);
+  useEffect(() => { fetchTodayLogs(); }, [fetchTodayLogs]);
   useEffect(() => {
-    const t = setInterval(fetchStats, 15000);
+    const t = setInterval(() => { fetchStats(); fetchTodayLogs(); }, 15000);
     return () => clearInterval(t);
-  }, [fetchStats]);
+  }, [fetchStats, fetchTodayLogs]);
+
+  const handleMoodSubmit = async () => {
+    if (!score) return;
+    const slot = getCurrentSlot();
+    setSubmitting(true);
+    setCheckinError(null);
+    try {
+      await logMood({ score, label: SCORE_LABELS[score], slot, note });
+      await fetchTodayLogs();
+      setScore(null);
+      setNote('');
+    } catch (err) {
+      if (err.response?.status === 409) {
+        setCheckinError('Already logged for this slot today.');
+        await fetchTodayLogs();
+      } else {
+        setCheckinError('Something went wrong. Try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <section className="section active" id="section-home">
@@ -43,6 +94,98 @@ export default function HomeSection({ navTo }) {
           </div>
         </div>
       </div>
+
+      {/* Mood Check-In — auto-detects current slot */}
+      {(() => {
+        const currentSlot = SLOTS.find(s => s.key === getCurrentSlot());
+        const alreadyLogged = todayLogs.some(l => l.slot === currentSlot.key);
+        const loggedEntry   = todayLogs.find(l => l.slot === currentSlot.key);
+        return (
+          <div style={{ margin: '0 0 40px', padding: '28px 32px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <span style={{ fontSize: 28 }}>{currentSlot.icon}</span>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+                  {alreadyLogged ? `${currentSlot.label} check-in done ✓` : `How are you feeling this ${currentSlot.label.toLowerCase()}?`}
+                </h2>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3, margin: 0 }}>
+                  {alreadyLogged
+                    ? `You logged ${SCORE_EMOJIS[loggedEntry?.score]} ${loggedEntry?.label} · ${loggedEntry?.note || 'no note'}`
+                    : `${currentSlot.timeHint} · tap a score to log your mood`}
+                </p>
+              </div>
+            </div>
+
+            {alreadyLogged ? (
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {SLOTS.map(s => {
+                  const entry = todayLogs.find(l => l.slot === s.key);
+                  return (
+                    <div key={s.key} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 16px', borderRadius: 10,
+                      background: entry ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${entry ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
+                      fontSize: 13, color: entry ? '#86efac' : 'var(--text-dim)',
+                    }}>
+                      <span>{s.icon}</span>
+                      <span>{s.label}</span>
+                      {entry ? <span>{SCORE_EMOJIS[entry.score]} {entry.label}</span> : <span style={{ opacity: 0.4 }}>—</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {[1,2,3,4,5].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setScore(n)}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        padding: '10px 18px', borderRadius: 10, border: '1px solid',
+                        borderColor: score === n ? '#6366f1' : 'var(--border)',
+                        background: score === n ? 'rgba(99,102,241,0.2)' : 'transparent',
+                        cursor: 'pointer', color: 'var(--text)', transition: 'all 0.15s',
+                      }}
+                    >
+                      <span style={{ fontSize: 24 }}>{SCORE_EMOJIS[n]}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>{SCORE_LABELS[n]}</span>
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  placeholder="Add a note… (optional)"
+                  style={{
+                    width: '100%', padding: '10px 14px', borderRadius: 8,
+                    border: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)',
+                    color: 'var(--text)', fontSize: 13, marginBottom: 14, boxSizing: 'border-box',
+                  }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <button
+                    disabled={!score || submitting}
+                    onClick={handleMoodSubmit}
+                    style={{
+                      padding: '10px 24px', borderRadius: 8, border: 'none',
+                      background: !score || submitting ? 'rgba(99,102,241,0.3)' : '#6366f1',
+                      color: 'white', fontWeight: 700, fontSize: 14,
+                      cursor: !score || submitting ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {submitting ? 'Logging…' : 'Log Mood'}
+                  </button>
+                  {checkinError && <span style={{ fontSize: 12, color: '#fca5a5' }}>{checkinError}</span>}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Pillars */}
       <div className="pillars-section">
@@ -115,7 +258,7 @@ export default function HomeSection({ navTo }) {
               </div>
             </div>
             <div className="hcm-tags">
-              <span className="hcm-tag">� {loadingStats ? '...' : ventsToday} posts today</span>
+              <span className="hcm-tag">🗣 {loadingStats ? '...' : ventsToday} posts today</span>
               <span className="hcm-tag">🤝 Volunteers online</span>
               <span className="hcm-tag">🌱 Community</span>
             </div>

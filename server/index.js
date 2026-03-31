@@ -30,6 +30,7 @@ app.use('/api/journal',    require('./routes/journal'));
 app.use('/api/admin',      require('./routes/admin'));
 app.use('/api/mentor',     require('./routes/mentor'));
 app.use('/api/chat',       require('./routes/chat'));
+app.use('/api/reviews',    require('./routes/reviews'));
 
 // ── Socket.io ────────────────────────────────────────────────────────────────
 // Authenticate socket connections via JWT
@@ -113,10 +114,8 @@ io.on('connection', (socket) => {
       // Notify everyone in the room
       io.to(sessionId).emit('session_ended', { endedBy: name });
 
-      // Clean up messages after 5s
-      setTimeout(async () => {
-        await ChatMessage.deleteMany({ sessionId });
-      }, 5000);
+      // Clean up messages immediately
+      await ChatMessage.deleteMany({ sessionId });
     } catch (err) {
       socket.emit('error', { message: err.message });
     }

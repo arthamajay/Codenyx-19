@@ -12,14 +12,73 @@ const guard = [authMiddleware, adminMiddleware];
 // ── DASHBOARD STATS ──────────────────────────────────────────────────────────
 router.get('/stats', guard, async (req, res) => {
   try {
-    const [totalUsers, totalMentors, totalVents, totalSessions, recentVents] = await Promise.all([
+    const now = new Date();
+    const day7  = new Date(now - 7  * 86400000);
+    const day30 = new Date(now - 30 * 86400000);
+
+    const [
+      totalUsers, totalMentors, totalVents, totalSessions,
+      recentVents, moodLogs, sessions30, newUsers7,
+    ] = await Promise.all([
       User.countDocuments({ role: 'user' }),
       User.countDocuments({ role: 'mentor' }),
       Vent.countDocuments(),
       ChatSession.countDocuments(),
       Vent.find({ distress: { $gt: 0.7 } }).sort({ createdAt: -1 }).limit(5),
+      MoodLog.find({ createdAt: { $gte: day30 } }),
+      ChatSession.find({ createdAt: { $gte: day30 } }),
+      User.countDocuments({ role: 'user', createdAt: { $gte: day7 } }),
     ]);
-    res.json({ totalUsers, totalMentors, totalVents, totalSessions, highDistressVents: recentVents });
+
+    // Mood distribution (last 30 days)
+    const moodDist = { 'Very Low': 0, 'Low': 0, 'Okay': 0, 'Good': 0, 'Great': 0 };
+    moodLogs.forEach(m => { if (moodDist[m.label] !== undefined) moodDist[m.label]++; });
+    const moodDistribution = Object.entries(moodDist).map(([label, count]) => ({ label, count }));
+
+    // Daily check-ins for last 14 days
+    const dailyCheckins = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const count = moodLogs.filter(m => new Date(m.createdAt).toDateString() === d.toDateString()).length;
+      dailyCheckins.push({ date: dateStr, checkins: count });
+    }
+
+    // Sessions per day last 14 days
+    const dailySessions = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const count = sessions30.filter(s => new Date(s.createdAt).toDateString() === d.toDateString()).length;
+      dailySessions.push({ date: dateStr, sessions: count });
+    }
+
+    // Mood by slot
+    const slotDist = { morning: 0, afternoon: 0, evening: 0 };
+    moodLogs.forEach(m => { if (slotDist[m.slot] !== undefined) slotDist[m.slot]++; });
+    const slotDistribution = Object.entries(slotDist).map(([slot, count]) => ({ slot, count }));
+
+    // Vent mood breakdown
+    const allVents = await Vent.find({}, 'mood distress');
+    const ventMoods = {};
+    allVents.forEach(v => { ventMoods[v.mood] = (ventMoods[v.mood] || 0) + 1; });
+    const ventMoodDist = Object.entries(ventMoods).map(([mood, count]) => ({ mood, count }));
+
+    // Escalation rate
+    const escalated = sessions30.filter(s => s.escalated).length;
+    const avgDuration = sessions30.length
+      ? Math.round(sessions30.reduce((a, s) => a + (s.duration || 0), 0) / sessions30.length)
+      : 0;
+
+    res.json({
+      totalUsers, totalMentors, totalVents, totalSessions,
+      newUsers7, escalated, avgDuration,
+      highDistressVents: recentVents,
+      moodDistribution, dailyCheckins, dailySessions,
+      slotDistribution, ventMoodDist,
+      totalCheckins: moodLogs.length,
+      sessions30: sessions30.length,
+    });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -36,14 +95,20 @@ router.get('/mentors', guard, async (req, res) => {
 // POST create mentor (admin only)
 router.post('/mentors', guard, async (req, res) => {
   try {
-    const { name, email, password, age, specialties, bio } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: 'Name, email and password required' });
+    const { name, username, email, password, age, specialties, bio } = req.body;
+    if (!name || !username || !email || !password) return res.status(400).json({ message: 'Name, username, email and password are required' });
+
+    if (!/^[a-z0-9_]{3,20}$/.test(username.toLowerCase()))
+      return res.status(400).json({ message: 'Username must be 3–20 characters, letters/numbers/underscore only' });
+
+    const usernameExists = await User.findOne({ username: username.toLowerCase() });
+    if (usernameExists) return res.status(409).json({ message: 'Username already taken' });
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(409).json({ message: 'Email already registered' });
 
     const mentor = await User.create({
-      name, email, password, age: age || 25, role: 'mentor',
+      name, username: username.toLowerCase(), email, password, age: age || 25, role: 'mentor',
       specialties: specialties || [], bio: bio || '',
       status: 'available', sessions: 0, rating: 5.0,
     });

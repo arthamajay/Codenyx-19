@@ -53,7 +53,7 @@ export default function MentorDashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Poll active chats (still needed to discover new sessions)
+  // Poll active chats — full overwrite so ended sessions disappear on refresh
   const pollActiveChats = useCallback(async () => {
     try {
       const res = await getMentorActiveChats();
@@ -103,8 +103,13 @@ export default function MentorDashboard() {
         text: '✅ Session ended by the user.',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }]);
-      if (openChatRef.current) {
-        setActiveChats(prev => prev.filter(s => s !== openChatRef.current.sessionId));
+      // Remove from active list immediately
+      const chat = openChatRef.current;
+      if (chat) {
+        setActiveChats(prev => prev.filter(s => s !== chat.sessionId));
+        openChatRef.current = null;
+        setOpenChat(null);
+        setChatMessages([]);
       }
     };
 
@@ -141,15 +146,20 @@ export default function MentorDashboard() {
 
   const endSession = () => {
     const chat = openChatRef.current;
-    if (!chat || !socket) return;
-    socket.emit('end_session', {
-      sessionId:  chat.sessionId,
-      mentorName: profile?.name,
-      escalated:  false,
-      duration:   0,
-    });
-    setActiveChats(prev => prev.filter(s => s !== chat.sessionId));
-    closeChatSession();
+    if (chat && socket) {
+      socket.emit('end_session', {
+        sessionId:  chat.sessionId,
+        mentorName: profile?.name,
+        escalated:  false,
+        duration:   0,
+      });
+      socket.emit('leave_session', chat.sessionId);
+    }
+    // Immediately close on mentor side
+    setActiveChats(prev => prev.filter(s => s !== chat?.sessionId));
+    openChatRef.current = null;
+    setOpenChat(null);
+    setChatMessages([]);
   };
 
   const sendReply = () => {
@@ -256,7 +266,7 @@ export default function MentorDashboard() {
       <nav className="navbar">
         <div className="nav-brand">
           <div className="brand-icon">🧠</div>
-          <span className="brand-name">Mind<span className="brand-accent">Bridge</span></span>
+          <span className="brand-name">Sah<span className="brand-accent">ara</span></span>
           <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', marginLeft: 8 }}>Mentor</span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>

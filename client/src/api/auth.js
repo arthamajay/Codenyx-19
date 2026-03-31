@@ -64,3 +64,6 @@ export const getChatMessages   = (sid, since) => API.get(`/chat/${sid}${since ? 
 export const sendChatMessage   = (sid, data)  => API.post(`/chat/${sid}`, data);
 export const endChatSession    = (sid, data)  => API.post(`/chat/${sid}/end`, data);
 export const getMentorActiveChats = ()        => API.get('/chat/mentor/active');
+
+export const submitReview  = (data)      => API.post('/reviews', data);
+export const getMentorReviews = (id)     => API.get(`/reviews/mentor/${id}`);

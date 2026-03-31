@@ -1,20 +1,98 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getVolunteers } from '../../api/auth';
+import { getVolunteers, submitReview } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 
+function ReviewModal({ vol, sessionId, onSubmit, onSkip }) {
+  const [rating, setRating]   = useState(0);
+  const [hover, setHover]     = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!rating) return;
+    setSubmitting(true);
+    try {
+      await submitReview({ sessionId, mentorId: vol._id, mentorName: vol.name, rating, comment });
+      onSubmit(rating);
+    } catch (e) { console.error(e); onSubmit(rating); }
+    finally { setSubmitting(false); }
+  };
+
+  const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 400 }}>
+      <div className="modal-box" style={{ maxWidth: 440, textAlign: 'center' }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>💜</div>
+        <h3 className="modal-title" style={{ textAlign: 'center', marginBottom: 6 }}>Session Complete</h3>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
+          How was your session with <strong>{vol.name}</strong>?
+        </p>
+
+        {/* Star rating */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+          {[1, 2, 3, 4, 5].map(star => (
+            <button key={star}
+              onMouseEnter={() => setHover(star)}
+              onMouseLeave={() => setHover(0)}
+              onClick={() => setRating(star)}
+              style={{
+                fontSize: 36, background: 'none', border: 'none', cursor: 'pointer',
+                color: star <= (hover || rating) ? '#f59e0b' : 'var(--border)',
+                transition: 'color 0.15s, transform 0.15s',
+                transform: star <= (hover || rating) ? 'scale(1.2)' : 'scale(1)',
+              }}>
+              ★
+            </button>
+          ))}
+        </div>
+        {(hover || rating) > 0 && (
+          <div style={{ fontSize: 13, color: '#f59e0b', fontWeight: 600, marginBottom: 16 }}>
+            {labels[hover || rating]}
+          </div>
+        )}
+
+        {/* Optional comment */}
+        <textarea
+          placeholder="Share your experience (optional)..."
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+          maxLength={300}
+          style={{
+            width: '100%', minHeight: 80, background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)',
+            fontFamily: 'inherit', fontSize: 13, padding: '10px 14px', resize: 'none',
+            marginBottom: 20,
+          }}
+        />
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+          <button className="auth-submit-btn"
+            style={{ width: 'auto', padding: '10px 32px', marginBottom: 0, opacity: rating ? 1 : 0.5 }}
+            onClick={handleSubmit} disabled={!rating || submitting}>
+            {submitting ? '⏳ Submitting...' : 'Submit Review'}
+          </button>
+          <button className="btn btn-ghost" onClick={onSkip}>Skip</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HelpSection() {
-  const { user }           = useAuth();
+  const { user }              = useAuth();
   const { socket, connected } = useSocket();
   const [volunteers, setVolunteers] = useState([]);
   const [loading, setLoading]       = useState(true);
   const [chatVol, setChatVol]       = useState(null);
   const [messages, setMessages]     = useState([]);
   const [input, setInput]           = useState('');
-  const [typing, setTyping]         = useState(false);   // mentor is typing
+  const [typing, setTyping]         = useState(false);
   const [typingTimer, setTypingTimer] = useState(null);
   const [escalationAlert, setEscalationAlert] = useState(false);
   const [sessionEnded, setSessionEnded]       = useState(false);
+  const [showReview, setShowReview]           = useState(false);
   const [chatStart, setChatStart]   = useState(null);
   const sessionIdRef   = useRef(null);
   const chatVolRef     = useRef(null);
@@ -32,12 +110,11 @@ export default function HelpSection() {
     return () => clearInterval(t);
   }, []);
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  // Socket event listeners — set up once, read sessionId from ref
+  // Socket listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -60,12 +137,15 @@ export default function HelpSection() {
     };
 
     const onSessionEnded = () => {
+      // Both sides get this — show the ended message then the review modal
       setSessionEnded(true);
       setMessages(prev => [...prev, {
         _id: 'ended', from: 'recv',
         text: '✅ Session ended. Thank you for reaching out. Take care 💜',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }]);
+      // Show review after a short delay
+      setTimeout(() => setShowReview(true), 1500);
     };
 
     socket.on('new_message',   onMessage);
@@ -82,54 +162,53 @@ export default function HelpSection() {
   const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const startChat = (vol) => {
-    if (!socket || !connected) {
-      alert('Chat is connecting, please try again in a moment.');
-      return;
-    }
-    const userId = user?.id || user?._id || user?.email || 'anon';
-    const sid    = `${userId}__${vol._id}`;
-
+    if (!socket || !connected) { alert('Chat is connecting, please try again.'); return; }
+    const userId = user?.id;
+    if (!userId) { alert('Session error. Please log out and back in.'); return; }
+    const sid = `${userId}__${vol._id}`;
     sessionIdRef.current = sid;
     chatVolRef.current   = vol;
-
     setChatVol(vol);
     setChatStart(Date.now());
-    setMessages([]);
+    setMessages([{
+      _id: 'welcome',
+      from: 'recv',
+      text: `Hi! I'm ${vol.name}. ${vol.bio || "I'm here to listen."} Take all the time you need — I'm here. 💜`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
     setSessionEnded(false);
+    setShowReview(false);
     setTyping(false);
-
     socket.emit('join_session', sid);
-
-    // Send opening messages via socket
-    socket.emit('send_message', {
-      sessionId: sid,
-      text:      `Hi! I'm ${vol.name}. ${vol.bio || "I'm here to listen."} Take all the time you need — I'm here. 💜`,
-      from:      'mentor',
-      fromName:  vol.name,
-    });
-    setTimeout(() => {
-      socket.emit('send_message', {
-        sessionId: sid,
-        text:      "What's been on your mind lately? You can start wherever feels comfortable.",
-        from:      'mentor',
-        fromName:  vol.name,
-      });
-    }, 1500);
   };
 
-  const endChat = async (escalated = false) => {
+  const endChat = (escalated = false) => {
     const sid = sessionIdRef.current;
     const vol = chatVolRef.current;
+    // Immediately show review modal — don't wait for socket roundtrip
+    setSessionEnded(true);
+    setMessages(prev => [...prev, {
+      _id: 'ended-local', from: 'recv',
+      text: '✅ Session ended. Thank you for reaching out. Take care 💜',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
+    setTimeout(() => setShowReview(true), 800);
+
+    // Also notify the other side via socket
     if (sid && vol && socket && !sessionEnded) {
       const duration = Math.round((Date.now() - chatStart) / 60000);
       socket.emit('end_session', { sessionId: sid, mentorName: vol.name, escalated, duration });
     }
     if (sid && socket) socket.emit('leave_session', sid);
+  };
+
+  const closeAfterReview = () => {
     sessionIdRef.current = null;
     chatVolRef.current   = null;
     setChatVol(null);
     setMessages([]);
     setSessionEnded(false);
+    setShowReview(false);
     setEscalationAlert(false);
     setTyping(false);
   };
@@ -139,19 +218,9 @@ export default function HelpSection() {
     if (!input.trim() || !sid || !socket || sessionEnded) return;
     const text = input.trim();
     setInput('');
-
-    socket.emit('send_message', {
-      sessionId: sid,
-      text,
-      from:     'user',
-      fromName: user?.name || 'User',
-    });
-
-    // Stop typing indicator
+    socket.emit('send_message', { sessionId: sid, text, from: 'user', fromName: user?.name || 'User' });
     socket.emit('typing', { sessionId: sid, isTyping: false });
     clearTimeout(typingTimer);
-
-    // High-risk check
     const highRisk = ['suicide','kill myself','end my life','hurt myself','want to die']
       .some(w => text.toLowerCase().includes(w));
     if (highRisk) {
@@ -159,9 +228,8 @@ export default function HelpSection() {
         setEscalationAlert(true);
         socket.emit('send_message', {
           sessionId: sid,
-          text:      "⚠️ I want to make sure you're getting the best support. There's a licensed therapist available right now. Would that be okay?",
-          from:      'mentor',
-          fromName:  chatVolRef.current?.name,
+          text: "⚠️ I want to make sure you're getting the best support. There's a licensed therapist available right now. Would that be okay?",
+          from: 'mentor', fromName: chatVolRef.current?.name,
         });
       }, 1500);
     }
@@ -181,8 +249,18 @@ export default function HelpSection() {
   if (chatVol) {
     return (
       <section className="section active">
+        {/* Review modal — shown after session ends */}
+        {showReview && (
+          <ReviewModal
+            vol={chatVol}
+            sessionId={sessionIdRef.current}
+            onSubmit={(rating) => { closeAfterReview(); }}
+            onSkip={closeAfterReview}
+          />
+        )}
+
         <div className="chat-header">
-          <button className="back-btn" onClick={() => endChat(false)}>← Back</button>
+          <button className="back-btn" onClick={() => sessionEnded ? closeAfterReview() : endChat(false)}>← Back</button>
           <div className="chat-partner-info">
             <div className="chat-avatar" style={{ background: chatVol.color }}>{chatVol.initials}</div>
             <div>
@@ -216,9 +294,7 @@ export default function HelpSection() {
 
         <div className="chat-messages">
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, padding: 20 }}>
-              Connecting... 💜
-            </div>
+            <div style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: 13, padding: 20 }}>Connecting... 💜</div>
           )}
           {messages.map((m, i) => (
             <div key={m._id || i} className={`chat-msg ${m.from}`}>
@@ -236,16 +312,13 @@ export default function HelpSection() {
         </div>
 
         <div className="chat-input-area">
-          <input
-            className="chat-input"
+          <input className="chat-input"
             placeholder={sessionEnded ? 'Session has ended' : 'Type your message...'}
-            value={input}
-            onChange={handleInputChange}
+            value={input} onChange={handleInputChange}
             onKeyUp={e => e.key === 'Enter' && sendMessage()}
-            disabled={sessionEnded}
-          />
+            disabled={sessionEnded} />
           {sessionEnded ? (
-            <button className="back-btn" onClick={() => endChat(false)} style={{ whiteSpace: 'nowrap' }}>← Back</button>
+            <button className="back-btn" onClick={closeAfterReview} style={{ whiteSpace: 'nowrap' }}>← Back</button>
           ) : (
             <button className="send-btn" onClick={sendMessage}>
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
