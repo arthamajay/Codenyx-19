@@ -120,14 +120,7 @@ function EmergencyChat({ onClose }) {
           )}
         </div>
 
-        {/* Helplines */}
-        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[['iCall','9152987821'],['Vandrevala','1860-2662-345'],['SNEHI','044-24640050']].map(([n, num]) => (
-            <a key={n} href={`tel:${num}`} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(244,63,94,0.1)', border: '1px solid rgba(244,63,94,0.25)', color: '#fca5a5', textDecoration: 'none' }}>
-              📞 {n}
-            </a>
-          ))}
-        </div>
+
       </div>
     </div>
   );

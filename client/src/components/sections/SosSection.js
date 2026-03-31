@@ -231,20 +231,6 @@ export default function SosSection() {
           </button>
         </div>
 
-        <div className="crisis-or">or call a helpline directly</div>
-        <div className="helpline-row">
-          {[
-            ['iCall',                '9152987821',    'Mon–Sat, 8am–10pm'],
-            ['Vandrevala Foundation','1860-2662-345', '24/7'],
-            ['SNEHI',               '044-24640050',  'Mon–Sat, 8am–10pm'],
-          ].map(([name, num, hrs]) => (
-            <a key={name} href={`tel:${num}`} className="helpline-card">
-              <div className="hl-name">{name}</div>
-              <div className="hl-num">{num}</div>
-              <div className="hl-hrs">{hrs}</div>
-            </a>
-          ))}
-        </div>
       </div>
     </section>
   );
